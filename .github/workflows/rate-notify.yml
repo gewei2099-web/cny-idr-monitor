@@ -17,7 +17,6 @@ on:
 jobs:
   notify:
     runs-on: ubuntu-latest
-    environment: github-pages  # 使用与 Pages 相同环境，可读取该 Environment 的 variables/secrets
     steps:
       - uses: actions/checkout@v4
 
@@ -34,18 +33,13 @@ jobs:
       - name: 安装依赖
         run: pip install -r requirements.txt
 
-      - name: 检查钉钉配置
-        id: check
-        run: |
-          URL="${{ secrets.DINGTALK_WEBHOOK_URL || vars.DINGTALK_WEBHOOK_URL }}"
-          if [ -z "$URL" ]; then
-            echo "::error::未配置 DINGTALK_WEBHOOK_URL。请到仓库 Settings → Secrets and variables → Actions，在 Secrets 或 Variables 中添加"
-            exit 1
-          fi
-          echo "钉钉 Webhook 已配置，开始推送"
-
       - name: 运行推送
         env:
-          DINGTALK_WEBHOOK_URL: ${{ secrets.DINGTALK_WEBHOOK_URL || vars.DINGTALK_WEBHOOK_URL }}
-          DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET || vars.DINGTALK_SECRET }}
-        run: python main.py
+          DINGTALK_WEBHOOK_URL: ${{ secrets.DINGTALK_WEBHOOK_URL }}
+          DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
+        run: |
+          if [ -z "$DINGTALK_WEBHOOK_URL" ]; then
+            echo "::error::未配置 DINGTALK_WEBHOOK_URL。请到仓库 Settings → Secrets and variables → Actions → Secrets 中添加（必须是 Secrets，不是 Variables）"
+            exit 1
+          fi
+          python main.py
