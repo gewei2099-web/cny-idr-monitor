@@ -114,5 +114,5 @@ git push -u origin main
 ## 注意事项
 
 - 钉钉机器人每分钟最多 20 条消息，建议每天推送 1–2 次即可
-- 汇率数据来自 [Frankfurter](https://www.frankfurter.app/)，非周末可能无最新数据
+- 汇率优先来自 [ExchangeRate-API](https://www.exchangerate-api.com/)（通常含当日），备用 [Frankfurter](https://www.frankfurter.app/)（ECB 数据，可能滞后 1 交易日）
 - 实际银行/兑换点汇率会有差异，仅供参考

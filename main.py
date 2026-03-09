@@ -22,9 +22,11 @@ from pathlib import Path
 import requests
 
 
-# 汇率 API（Frankfurter，免费无需 key）
-RATE_API = "https://api.frankfurter.app/latest?from=CNY&to=IDR"
-# 历史汇率（用于计算趋势）
+# 优先用 exchangerate-api（每日更新，通常含当日数据）
+RATE_API_PRIMARY = "https://api.exchangerate-api.com/v4/latest/CNY"
+# 备用：Frankfurter（ECB 数据，通常滞后 1 个交易日）
+RATE_API_FALLBACK = "https://api.frankfurter.app/latest?from=CNY&to=IDR"
+# 历史汇率（Frankfurter 支持日期范围）
 HISTORY_API = "https://api.frankfurter.app/{from_date}..{to_date}?from=CNY&to=IDR"
 
 # 本地记录文件：用于计算「今日最高」（多次运行时的日内最高）
@@ -56,14 +58,20 @@ def get_today_max(today: str) -> float | None:
 
 
 def fetch_rate() -> dict:
-    """获取当前 CNY/IDR 汇率"""
-    resp = requests.get(RATE_API, timeout=10)
-    resp.raise_for_status()
-    data = resp.json()
-    return {
-        "rate": data["rates"]["IDR"],
-        "date": data["date"],
-    }
+    """获取当前 CNY/IDR 汇率，优先用当日更新的数据源"""
+    for url in [RATE_API_PRIMARY, RATE_API_FALLBACK]:
+        try:
+            resp = requests.get(url, timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+            rate = data["rates"]["IDR"]
+            date = data.get("date", "")
+            if not date and "time_last_updated" in data:
+                date = datetime.fromtimestamp(data["time_last_updated"]).strftime("%Y-%m-%d")
+            return {"rate": rate, "date": date or datetime.now().strftime("%Y-%m-%d")}
+        except Exception:
+            continue
+    raise RuntimeError("无法获取汇率，请检查网络")
 
 
 def fetch_history(days: int = 30) -> list[dict]:
@@ -129,26 +137,23 @@ def format_markdown(
     week_avg: float | None = None,
     history: list[dict] | None = None,
 ) -> str:
-    """生成钉钉 Markdown 消息内容"""
+    """生成钉钉 Markdown 消息内容（优化排版，兼容移动端）"""
     lines = [
-        "### 人民币 → 印尼盾汇率",
+        "## 💱 人民币 → 印尼盾",
         "",
-        f"> **实时：1 CNY = {rate:,.2f} IDR**",
+        f"**实时**　1 CNY = **{rate:,.2f}** IDR",
         "",
-        f"📅 数据日期：{date}",
+        f"📅 {date}",
         "",
     ]
 
-    # 汇总指标
-    summary = []
-    if today_max is not None:
-        summary.append(f"今日最高：{today_max:,.2f}")
-    if week_max is not None:
-        summary.append(f"一周最高：{week_max:,.2f}")
-    if week_avg is not None:
-        summary.append(f"一周均值：{week_avg:,.2f}")
-    if summary:
-        lines.append(" | ".join(summary))
+    # 汇总指标（分行展示，移动端更易读）
+    if today_max is not None or week_max is not None or week_avg is not None:
+        lines.append("**今日最高**　{0}　　**一周最高**　{1}　　**一周均值**　{2}".format(
+            f"{today_max:,.2f}" if today_max is not None else "--",
+            f"{week_max:,.2f}" if week_max is not None else "--",
+            f"{week_avg:,.2f}" if week_avg is not None else "--",
+        ))
         lines.append("")
 
     if history and len(history) >= 2:
@@ -158,18 +163,16 @@ def format_markdown(
         change = latest - prev
         pct = (change / prev) * 100 if prev else 0
         if change > 0:
-            lines.append(f"📈 较昨日：+{change:.2f} ({pct:+.2f}%)")
+            lines.append(f"📈 较昨日　+{change:.2f}　({pct:+.2f}%)")
         else:
-            lines.append(f"📉 较昨日：{change:.2f} ({pct:.2f}%)")
+            lines.append(f"📉 较昨日　{change:.2f}　({pct:.2f}%)")
         lines.append("")
 
-        # 近 7 天简表
+        # 近 7 日（列表格式，钉钉移动端不支持表格）
         recent = history[-7:] if len(history) >= 7 else history
-        lines.append("**近几日**")
-        lines.append("| 日期 | 汇率 |")
-        lines.append("| --- | --- |")
+        lines.append("**近 7 日**")
         for r in recent:
-            lines.append(f"| {r['date']} | {r['rate']:,.2f} |")
+            lines.append(f"- {r['date']}　{r['rate']:,.2f}")
 
     return "\n".join(lines)
 
