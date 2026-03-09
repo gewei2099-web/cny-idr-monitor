@@ -1,7 +1,7 @@
 # 定时获取汇率并推送到钉钉
-# 配置方式二选一（推荐 Secrets，更安全）：
-#   方式一：Settings → Secrets and variables → Actions → Secrets 添加 DINGTALK_WEBHOOK_URL、DINGTALK_SECRET
-#   方式二：同路径 → Variables 添加（Webhook URL 含 token，建议用 Secrets）
+# 配置：Settings → Environments → github-pages → Environment secrets
+#   添加 DINGTALK_WEBHOOK_URL、DINGTALK_SECRET（必须用 Environment secrets，不是 Repository secrets）
+# 若 Environment 启用了 Required reviewers，需在 Actions 中批准运行
 
 name: CNY/IDR 汇率推送
 
@@ -16,6 +16,7 @@ on:
 jobs:
   notify:
     runs-on: ubuntu-latest
+    environment: github-pages  # 必填：Environment secrets 需在此环境下才可读取
     steps:
       - uses: actions/checkout@v4
 
