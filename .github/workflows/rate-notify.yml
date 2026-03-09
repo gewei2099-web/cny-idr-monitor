@@ -6,6 +6,8 @@
 name: CNY/IDR 汇率推送
 
 on:
+  push:
+    branches: [main, master]
   schedule:
     # 每天北京时间 9:00（1:00 UTC），可按需修改 cron
     - cron: '0 1 * * *'
