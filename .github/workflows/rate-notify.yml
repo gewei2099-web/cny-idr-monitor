@@ -33,6 +33,14 @@ jobs:
       - name: 安装依赖
         run: pip install -r requirements.txt
 
+      - name: 检查钉钉配置
+        run: |
+          if [ -z "${{ secrets.DINGTALK_WEBHOOK_URL }}" ]; then
+            echo "::error::未配置 DINGTALK_WEBHOOK_URL，请在仓库 Settings → Secrets → Actions 中添加"
+            exit 1
+          fi
+          echo "钉钉 Webhook 已配置，开始推送"
+
       - name: 运行推送
         env:
           DINGTALK_WEBHOOK_URL: ${{ secrets.DINGTALK_WEBHOOK_URL }}
