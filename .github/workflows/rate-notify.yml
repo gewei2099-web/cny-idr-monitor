@@ -1,7 +1,7 @@
 # 定时获取汇率并推送到钉钉
-# 需在仓库 Settings → Secrets and variables → Actions 中配置：
-#   DINGTALK_WEBHOOK_URL - 钉钉机器人 Webhook 地址
-#   DINGTALK_SECRET - 加签密钥（未启用可留空或创建同名 Secret 填空）
+# 配置方式二选一（推荐 Secrets，更安全）：
+#   方式一：Settings → Secrets and variables → Actions → Secrets 添加 DINGTALK_WEBHOOK_URL、DINGTALK_SECRET
+#   方式二：同路径 → Variables 添加（Webhook URL 含 token，建议用 Secrets）
 
 name: CNY/IDR 汇率推送
 
@@ -17,6 +17,7 @@ on:
 jobs:
   notify:
     runs-on: ubuntu-latest
+    environment: github-pages  # 使用与 Pages 相同环境，可读取该 Environment 的 variables/secrets
     steps:
       - uses: actions/checkout@v4
 
@@ -34,15 +35,17 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: 检查钉钉配置
+        id: check
         run: |
-          if [ -z "${{ secrets.DINGTALK_WEBHOOK_URL }}" ]; then
-            echo "::error::未配置 DINGTALK_WEBHOOK_URL，请在仓库 Settings → Secrets → Actions 中添加"
+          URL="${{ secrets.DINGTALK_WEBHOOK_URL || vars.DINGTALK_WEBHOOK_URL }}"
+          if [ -z "$URL" ]; then
+            echo "::error::未配置 DINGTALK_WEBHOOK_URL。请到仓库 Settings → Secrets and variables → Actions，在 Secrets 或 Variables 中添加"
             exit 1
           fi
           echo "钉钉 Webhook 已配置，开始推送"
 
       - name: 运行推送
         env:
-          DINGTALK_WEBHOOK_URL: ${{ secrets.DINGTALK_WEBHOOK_URL }}
-          DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
+          DINGTALK_WEBHOOK_URL: ${{ secrets.DINGTALK_WEBHOOK_URL || vars.DINGTALK_WEBHOOK_URL }}
+          DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET || vars.DINGTALK_SECRET }}
         run: python main.py
