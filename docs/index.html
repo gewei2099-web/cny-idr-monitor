@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CNY/IDR 汇率</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --card: #1a2332;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --high: #3fb950;
+      --low: #f85149;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 1rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 400px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: var(--muted);
+    }
+    .card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .rate-main {
+      font-size: 2rem;
+      font-weight: 700;
+      margin: 0.5rem 0;
+    }
+    .rate-main span { color: var(--accent); }
+    .meta { font-size: 0.875rem; color: var(--muted); }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+    .stat {
+      text-align: center;
+      padding: 0.5rem;
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+      font-size: 0.8rem;
+    }
+    .stat .label { color: var(--muted); }
+    .stat .value { font-weight: 600; }
+    .change-up { color: var(--high); }
+    .change-down { color: var(--low); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    th, td { padding: 0.5rem 0; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    th { color: var(--muted); font-weight: 500; }
+    .loading { color: var(--muted); }
+    .error { color: var(--low); }
+    footer {
+      margin-top: 1.5rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>人民币 → 印尼盾</h1>
+    <div class="card">
+      <div class="meta">实时汇率</div>
+      <div class="rate-main"><span id="rate">--</span> IDR</div>
+      <div class="meta">1 CNY = <span id="rateVal">--</span> IDR · 数据日期 <span id="date">--</span></div>
+      <div class="stats">
+        <div class="stat">
+          <div class="label">一周最高</div>
+          <div class="value" id="weekMax">--</div>
+        </div>
+        <div class="stat">
+          <div class="label">一周均值</div>
+          <div class="value" id="weekAvg">--</div>
+        </div>
+        <div class="stat">
+          <div class="label">较昨日</div>
+          <div class="value" id="change">--</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="meta" style="margin-bottom: 0.5rem;">近 7 日</div>
+      <table>
+        <thead><tr><th>日期</th><th>汇率</th></tr></thead>
+        <tbody id="history"></tbody>
+      </table>
+    </div>
+    <footer>数据来源 Frankfurter · 仅供参考，以银行实际为准</footer>
+  </div>
+  <script>
+    const API = 'https://api.frankfurter.app';
+    const toIdr = v => v != null ? Number(v).toLocaleString('zh-CN', {minimumFractionDigits: 2}) : '--';
+
+    async function load() {
+      try {
+        const end = new Date();
+        const start = new Date();
+        start.setDate(start.getDate() - 14);
+        const [latest, history] = await Promise.all([
+          fetch(API + '/latest?from=CNY&to=IDR').then(r => r.json()),
+          fetch(API + `/${start.toISOString().slice(0,10)}..${end.toISOString().slice(0,10)}?from=CNY&to=IDR`).then(r => r.json())
+        ]);
+
+        const rate = latest.rates?.IDR;
+        const date = latest.date;
+        if (!rate) throw new Error('无汇率数据');
+
+        const rates = history?.rates ? Object.entries(history.rates)
+          .map(([d, v]) => ({ date: d, rate: v?.IDR ?? v }))
+          .sort((a,b) => a.date.localeCompare(b.date))
+          .filter(r => r.rate != null) : [];
+
+        const weekRates = rates.slice(-7).map(r => r.rate);
+        const weekMax = weekRates.length ? Math.max(...weekRates) : null;
+        const weekAvg = weekRates.length ? weekRates.reduce((a,b)=>a+b,0) / weekRates.length : null;
+        const prev = rates.length >= 2 ? rates[rates.length-2].rate : null;
+        const chg = prev != null ? rate - prev : null;
+        const chgPct = prev != null ? ((rate - prev) / prev * 100) : null;
+
+        document.getElementById('rate').textContent = toIdr(rate);
+        document.getElementById('rateVal').textContent = toIdr(rate);
+        document.getElementById('date').textContent = date;
+        document.getElementById('weekMax').textContent = toIdr(weekMax);
+        document.getElementById('weekAvg').textContent = toIdr(weekAvg);
+
+        const chgEl = document.getElementById('change');
+        if (chg != null) {
+          chgEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + ' (' + (chgPct >= 0 ? '+' : '') + chgPct.toFixed(2) + '%)';
+          chgEl.className = 'value ' + (chg >= 0 ? 'change-up' : 'change-down');
+        }
+
+        const tbody = document.getElementById('history');
+        const recent = rates.slice(-7);
+        tbody.innerHTML = recent.length
+          ? recent.map(r => `<tr><td>${r.date}</td><td>${toIdr(r.rate)}</td></tr>`).join('')
+          : '<tr><td colspan="2" class="loading">暂无数据</td></tr>';
+      } catch (e) {
+        document.getElementById('rate').textContent = '--';
+        document.getElementById('rateVal').textContent = '--';
+        document.getElementById('date').textContent = '--';
+        document.getElementById('weekMax').textContent = '--';
+        document.getElementById('weekAvg').textContent = '--';
+        document.getElementById('change').textContent = '--';
+        document.getElementById('history').innerHTML = '<tr><td colspan="2" class="error">加载失败: ' + e.message + '</td></tr>';
+      }
+    }
+    load();
+  </script>
+</body>
+</html>
