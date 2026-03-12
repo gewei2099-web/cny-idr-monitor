@@ -22,12 +22,10 @@ from pathlib import Path
 import requests
 
 
-# 优先用 exchangerate-api（每日更新，通常含当日数据）
-RATE_API_PRIMARY = "https://api.exchangerate-api.com/v4/latest/CNY"
-# 备用：Frankfurter（ECB 数据，通常滞后 1 个交易日）
-RATE_API_FALLBACK = "https://api.frankfurter.app/latest?from=CNY&to=IDR"
-# 历史汇率（Frankfurter 支持日期范围）
-HISTORY_API = "https://api.frankfurter.app/{from_date}..{to_date}?from=CNY&to=IDR"
+# 单一数据源 Frankfurter（ECB 欧洲央行参考汇率），保证实时/历史/统计一致
+# 使用官方 api.frankfurter.dev + v1 接口（base/symbols 参数）
+RATE_API = "https://api.frankfurter.dev/v1/latest?base=CNY&symbols=IDR"
+HISTORY_API = "https://api.frankfurter.dev/v1/{from_date}..{to_date}?base=CNY&symbols=IDR"
 
 # 本地记录文件：用于计算「今日最高」（多次运行时的日内最高）
 RATE_LOG_FILE = Path(__file__).parent / "rate_log.json"
@@ -58,20 +56,14 @@ def get_today_max(today: str) -> float | None:
 
 
 def fetch_rate() -> dict:
-    """获取当前 CNY/IDR 汇率，优先用当日更新的数据源"""
-    for url in [RATE_API_PRIMARY, RATE_API_FALLBACK]:
-        try:
-            resp = requests.get(url, timeout=10)
-            resp.raise_for_status()
-            data = resp.json()
-            rate = data["rates"]["IDR"]
-            date = data.get("date", "")
-            if not date and "time_last_updated" in data:
-                date = datetime.fromtimestamp(data["time_last_updated"]).strftime("%Y-%m-%d")
-            return {"rate": rate, "date": date or datetime.now().strftime("%Y-%m-%d")}
-        except Exception:
-            continue
-    raise RuntimeError("无法获取汇率，请检查网络")
+    """获取当前 CNY/IDR 汇率（Frankfurter/ECB）"""
+    resp = requests.get(RATE_API, timeout=10)
+    resp.raise_for_status()
+    data = resp.json()
+    return {
+        "rate": data["rates"]["IDR"],
+        "date": data["date"],
+    }
 
 
 def fetch_history(days: int = 30) -> list[dict]:

@@ -109,14 +109,10 @@
         <tbody id="history"></tbody>
       </table>
     </div>
-    <footer>数据来源 ExchangeRate-API / Frankfurter · 仅供参考，以银行实际为准</footer>
+    <footer>数据来源 Frankfurter（ECB 参考汇率）· 仅供参考，以银行实际为准</footer>
   </div>
   <script>
-    const RATE_APIS = [
-      'https://api.exchangerate-api.com/v4/latest/CNY',  // 每日更新，通常含当日
-      'https://api.frankfurter.app/latest?from=CNY&to=IDR'
-    ];
-    const HISTORY_API = 'https://api.frankfurter.app';
+    const API = 'https://api.frankfurter.dev/v1';
     const toIdr = v => v != null ? Number(v).toLocaleString('zh-CN', {minimumFractionDigits: 2}) : '--';
 
     async function load() {
@@ -124,17 +120,13 @@
         const end = new Date();
         const start = new Date();
         start.setDate(start.getDate() - 14);
-        let latest = null;
-        for (const url of RATE_APIS) {
-          try {
-            const r = await fetch(url).then(x => x.json());
-            if (r.rates?.IDR) { latest = r; break; }
-          } catch (_) {}
-        }
-        const history = await fetch(HISTORY_API + `/${start.toISOString().slice(0,10)}..${end.toISOString().slice(0,10)}?from=CNY&to=IDR`).then(r => r.json());
+        const [latest, history] = await Promise.all([
+          fetch(API + '/latest?base=CNY&symbols=IDR').then(r => r.json()),
+          fetch(API + `/${start.toISOString().slice(0,10)}..${end.toISOString().slice(0,10)}?base=CNY&symbols=IDR`).then(r => r.json())
+        ]);
 
-        const rate = latest?.rates?.IDR;
-        const date = latest?.date || new Date().toISOString().slice(0,10);
+        const rate = latest.rates?.IDR;
+        const date = latest.date;
         if (!rate) throw new Error('无汇率数据');
 
         const rates = history?.rates ? Object.entries(history.rates)
